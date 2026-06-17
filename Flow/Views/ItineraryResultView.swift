@@ -1,6 +1,7 @@
 import Combine
 import CoreLocation
 import SwiftUI
+import MapKit
 
 /// Filtres pour trier les itinéraires
 enum ItineraryFilter {
@@ -1033,227 +1034,6 @@ struct JourneyRow: View {
     }
 }
 
-struct SectionDetailView: View {
-    let section: ItinerarySection
-    let isLast: Bool
-    @State private var isStopsExpanded = false
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Timeline indicator
-            VStack(spacing: 0) {
-                Circle()
-                    .fill(circleColor)
-                    .frame(width: 12, height: 12)
-
-                if !isLast {
-                    Rectangle()
-                        .fill(lineColor)
-                        .frame(width: 2)
-                        .padding(.vertical, 4)
-                }
-            }
-
-            // Section content
-            VStack(alignment: .leading, spacing: 6) {
-                if section.type == "public_transport" {
-                    // Public transport section
-                    if let display = section.display_informations {
-                        HStack(spacing: 8) {
-                            // Line badge
-                            let label = display.code ?? display.label ?? "?"
-                            let isBus = display.commercial_mode?.lowercased().contains("bus") == true || display.physical_mode?.lowercased().contains("bus") == true
-                            if isBus || label.count > 3 {
-                                Text(label)
-                                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                                    .foregroundColor(Color(hex: display.text_color ?? "FFFFFF"))
-                                    .padding(.horizontal, 8)
-                                    .frame(minWidth: 32)
-                                    .frame(height: 32)
-                                    .background(RoundedRectangle(cornerRadius: 6).fill(Color(hex: display.color ?? "CCCCCC")))
-                            } else {
-                                Circle()
-                                    .fill(Color(hex: display.color ?? "CCCCCC"))
-                                    .frame(width: 32, height: 32)
-                                    .overlay(
-                                        Text(label)
-                                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                                            .foregroundColor(Color(hex: display.text_color ?? "FFFFFF"))
-                                    )
-                            }
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(
-                                    "\(display.commercial_mode ?? "Transport") \(display.label ?? "")"
-                                )
-                                .font(.system(.subheadline, design: .rounded))
-                                .fontWeight(.semibold)
-
-                                if let direction = display.direction {
-                                    Text("direction \(direction)")
-                                        .font(.system(.caption, design: .rounded))
-                                        .foregroundColor(.secondary)
-                                }
-                            }
-                            
-                            Spacer()
-                            
-                            NavigationLink(destination: LineSchematicPlanView(line: TransportLine(
-                                type: display.transportType,
-                                lineId: display.code ?? display.label ?? "?",
-                                status: .normal
-                            ))) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "map")
-                                    Text("Plan")
-                                        .font(.system(.caption, design: .rounded))
-                                        .fontWeight(.semibold)
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.blue.opacity(0.1), in: Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
-
-                        // Departure and arrival
-                        VStack(alignment: .leading, spacing: 6) {
-                            if let from = section.from?.name {
-                                HStack {
-                                    Text(formatTime(section.departure_date_time ?? ""))
-                                        .font(.system(.caption, design: .rounded))
-                                        .foregroundColor(.secondary)
-                                    Text(from)
-                                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                }
-                            }
-
-                            // Intermediate stops section
-                            if let stops = section.stop_date_times, !stops.isEmpty {
-                                Button(action: {
-                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                        isStopsExpanded.toggle()
-                                    }
-                                }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: isStopsExpanded ? "chevron.down" : "chevron.right")
-                                            .font(.caption2)
-                                        Text("\(stops.count) arrêt\(stops.count > 1 ? "s" : "") (\((section.duration ?? 0) / 60) min)")
-                                            .font(.system(.caption, design: .rounded))
-                                            .fontWeight(.medium)
-                                    }
-                                    .foregroundColor(.blue)
-                                    .padding(.vertical, 4)
-                                    .padding(.horizontal, 8)
-                                    .background(Color.blue.opacity(0.08))
-                                    .clipShape(Capsule())
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.leading, 8)
-
-                                if isStopsExpanded {
-                                    VerticalItineraryStopsView(section: section)
-                                        .padding(.leading, 8)
-                                        .transition(.opacity.combined(with: .move(edge: .top)))
-                                }
-                            }
-
-                            if let to = section.to?.name {
-                                HStack {
-                                    Text(formatTime(section.arrival_date_time ?? ""))
-                                        .font(.system(.caption, design: .rounded))
-                                        .foregroundColor(.secondary)
-                                    Text(to)
-                                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                }
-                            }
-                        }
-                        .padding(.leading, 40)
-
-                        if let duration = section.duration {
-                            Text("\(duration / 60) min")
-                                .font(.system(.caption2, design: .rounded))
-                                .foregroundColor(.secondary)
-                                .padding(.leading, 40)
-                        }
-                    }
-                } else if section.type == "street_network" || section.mode == "walking" {
-                    // Walking section
-                    HStack(spacing: 8) {
-                        Image(systemName: "figure.walk")
-                            .foregroundColor(.blue)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Marche à pied")
-                                .font(.system(.subheadline, design: .rounded))
-
-                            if let duration = section.duration {
-                                Text("\(duration / 60) min")
-                                    .font(.system(.caption, design: .rounded))
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                } else if section.type == "transfer" {
-                    // Transfer section
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .foregroundColor(.orange)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Correspondance")
-                                .font(.system(.subheadline, design: .rounded))
-
-                            if let duration = section.duration {
-                                Text("\(duration / 60) min")
-                                    .font(.system(.caption, design: .rounded))
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                } else if section.type == "waiting" {
-                    // Waiting section
-                    HStack(spacing: 8) {
-                        Image(systemName: "clock")
-                            .foregroundColor(.gray)
-
-                        Text("Attente \((section.duration ?? 0) / 60) min")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-        }
-    }
-
-    var circleColor: Color {
-        if section.type == "public_transport" {
-            return Color(hex: section.display_informations?.color ?? "CCCCCC")
-        } else if section.mode == "walking" {
-            return .blue
-        } else if section.type == "transfer" {
-            return .orange
-        } else {
-            return .gray
-        }
-    }
-
-    var lineColor: Color {
-        circleColor.opacity(0.3)
-    }
-
-    func formatTime(_ isoDate: String) -> String {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyyMMdd'T'HHmmss"
-        if let date = dateFormatter.date(from: isoDate) {
-            let timeFormatter = DateFormatter()
-            timeFormatter.timeStyle = .short
-            return timeFormatter.string(from: date)
-        }
-        return isoDate
-    }
-}
-
 // MARK: - COMPONENTS POUR L'ANIMATION DE VAGUE TYPOGRAPHIQUE
 
 private struct SFProVariableWeightModifier: ViewModifier {
@@ -1336,6 +1116,20 @@ struct JourneyPreviewSheet: View {
     let onStartNavigation: () -> Void
     
     @Environment(\.colorScheme) var colorScheme
+    @State private var region: MKCoordinateRegion
+
+    init(journey: Journey, destinationName: String, onStartNavigation: @escaping () -> Void) {
+        self.journey = journey
+        self.destinationName = destinationName
+        self.onStartNavigation = onStartNavigation
+
+        // Initialize region based on first section's departure coordinate or fallback to Paris
+        let initialCoord = journey.sections?.first?.from?.coordinate ?? CLLocationCoordinate2D(latitude: 48.8566, longitude: 2.3522)
+        self._region = State(initialValue: MKCoordinateRegion(
+            center: initialCoord,
+            span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
+        ))
+    }
 
     /// Temps de marche total (incluant les correspondances)
     private var walkingTime: Int {
@@ -1347,170 +1141,103 @@ struct JourneyPreviewSheet: View {
     }
 
     var body: some View {
-        ZStack {
-            // Background gradient fading from clear to black to blend with the map
-            VStack(spacing: 0) {
-                LinearGradient(
-                    colors: [.clear, .black.opacity(0.6), .black.opacity(0.95), .black],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 180)
+        VStack(spacing: 0) {
+            // Map Header
+            ZStack(alignment: .topTrailing) {
+                ItineraryMapViewRepresentable(journey: journey, region: $region)
+                    .frame(height: 280)
+                    .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                    .padding(.bottom, -32) // Overlap with content
                 
-                Color.black
+                // Gradient overlay at the bottom of the map
+                VStack {
+                    Spacer()
+                    LinearGradient(
+                        colors: [.clear, .black.opacity(0.5), .black],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 80)
+                }
+
+                // Close button
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(10)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .padding(20)
             }
             .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Header Row (Destination + Close Button)
-                HStack(alignment: .center) {
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    // Title and Destination
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("ITINÉRAIRE VERS")
+                        Text("ITINÉRAIRE")
+                            .font(.system(.caption, design: .rounded))
+                            .fontWeight(.bold)
+                            .foregroundColor(.blue)
+                        
+                        Text(destinationName)
+                            .font(.system(size: 34, weight: .black, design: .rounded))
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+
+                    // Summary metrics
+                    HStack(spacing: 0) {
+                        SummaryMetric(label: "DURÉE", value: formatDuration(journey.duration ?? 0), color: .green)
+                        Spacer()
+                        SummaryMetric(label: "MARCHE", value: "\(walkingTime / 60) MIN", color: .yellow)
+                        Spacer()
+                        SummaryMetric(label: "CORRESP.", value: "\(journey.nb_transfers ?? 0)", color: .red)
+                    }
+                    .padding(.horizontal)
+
+                    // Steps Timeline
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("DÉTAILS DU TRAJET")
                             .font(.system(.caption, design: .rounded))
                             .fontWeight(.bold)
                             .foregroundColor(.gray)
-                        
-                        // Destination station name
-                        HStack(spacing: 6) {
-                            ForEach(Array(destinationName.components(separatedBy: " ").enumerated()), id: \.offset) { index, word in
-                                AnimatedStationWordView(text: word, sequenceIndex: index, size: 24)
-                            }
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    // Close button
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(8)
-                            .background(Color.white.opacity(0.12), in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(.regular.interactive())
-                }
-                .padding(.horizontal)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-                
-                ScrollView {
-                    VStack(spacing: 16) {
-                        // Summary card (Duration, walking time)
-                        VStack(spacing: 12) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("DURÉE TOTALE")
-                                        .font(.system(.caption, design: .rounded))
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.gray)
-                                    Text(formatDuration(journey.duration ?? 0))
-                                        .font(.system(size: 26, weight: .black, design: .rounded))
-                                        .foregroundColor(.green)
-                                }
-                                
-                                Spacer()
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("TEMPS DE MARCHE")
-                                        .font(.system(.caption, design: .rounded))
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.gray)
-                                    Text("\(walkingTime / 60) MIN")
-                                        .font(.system(size: 26, weight: .black, design: .rounded))
-                                        .foregroundColor(.yellow)
-                                }
-                                
-                                Spacer()
-                                
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("CORRESPONDANCES")
-                                        .font(.system(.caption, design: .rounded))
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.gray)
-                                    Text("\(journey.nb_transfers ?? 0)")
-                                        .font(.system(size: 26, weight: .black, design: .rounded))
-                                        .foregroundColor(.red)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 12)
-                        .padding(.horizontal)
-                        
-                        Divider()
-                            .background(Color.white.opacity(0.15))
                             .padding(.horizontal)
-                            .padding(.vertical, 8)
                         
-                        // Steps Timeline Card
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("Étapes du trajet")
-                                    .font(.system(.headline, design: .rounded))
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white)
-                                Spacer()
-                            }
-                            .padding(.horizontal)
-                            .padding(.top, 12)
-                            
-                            VStack(spacing: 0) {
-                                if let sections = journey.sections {
-                                    ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
-                                        SectionDetailView(section: section, isLast: index == sections.count - 1)
-                                            .padding(.horizontal)
-                                            .padding(.vertical, 8)
-                                        
-                                        if index < sections.count - 1 {
-                                            Divider().padding(.leading, 40)
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.vertical, 8)
-                        }
-                        
-                        // Action buttons
                         VStack(spacing: 12) {
-                            // View on Map button
-                            NavigationLink(destination: ItineraryMapView(journey: journey)) {
-                                HStack {
-                                    Image(systemName: "map")
-                                    Text("Voir sur la carte")
-                                        .fontWeight(.bold)
+                            if let sections = journey.sections {
+                                ForEach(Array(sections.enumerated()), id: \.element.id) { index, section in
+                                    ItineraryStepView(section: section)
                                 }
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.white.opacity(0.15))
-                                .clipShape(Capsule())
                             }
-                            .buttonStyle(.plain)
-                            .glassEffect(.regular.interactive())
-                            
-                            // Go Button
-                            Button(action: onStartNavigation) {
-                                HStack {
-                                    Image(systemName: "location.fill")
-                                    Text("Démarrer la navigation")
-                                        .fontWeight(.bold)
-                                }
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color(hex: "0A84FF"))
-                                .clipShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
                         }
-                        .padding(.horizontal)
-                        .padding(.bottom, 24)
                     }
+
+                    // Action button
+                    Button(action: onStartNavigation) {
+                        HStack {
+                            Image(systemName: "location.fill")
+                                .font(.system(size: 18, weight: .bold))
+                            Text("Démarrer la navigation")
+                                .font(.system(.title3, design: .rounded))
+                                .fontWeight(.bold)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 18)
+                        .background(Color.blue)
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .shadow(color: .blue.opacity(0.3), radius: 10, y: 5)
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 8)
+                    .padding(.bottom, 40)
                 }
             }
         }
-        .presentationBackground(.clear)
+        .background(Color.black)
     }
 
     func formatTime(_ isoDate: String) -> String {
@@ -1529,10 +1256,289 @@ struct JourneyPreviewSheet: View {
         let hours = minutes / 60
         let mins = minutes % 60
         if hours > 0 {
-            return "\(hours)h\(String(format: "%02d", mins))"
+            return "\(hours)H\(String(format: "%02d", mins))"
         }
-        return "\(mins) min"
+        return "\(mins) MIN"
     }
+}
+
+struct SummaryMetric: View {
+    let label: String
+    let value: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(.caption2, design: .rounded))
+                .fontWeight(.bold)
+                .foregroundColor(.gray)
+            Text(value)
+                .font(.system(size: 24, weight: .black, design: .rounded))
+                .foregroundColor(color)
+        }
+    }
+}
+
+struct ItineraryStepView: View {
+    let section: ItinerarySection
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if section.type == "public_transport" {
+                publicTransportStep
+            } else if section.type == "street_network" || section.mode == "walking" {
+                walkingStep
+            } else if section.type == "transfer" {
+                transferStep
+            } else if section.type == "waiting" {
+                waitingStep
+            }
+        }
+        .padding(20)
+        .background(Color.white.opacity(0.05))
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .padding(.horizontal)
+    }
+
+    private var lineColor: Color {
+        if let colorHex = section.display_informations?.color {
+            return Color(hex: colorHex)
+        }
+        return .blue
+    }
+
+    private var publicTransportStep: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // Header with Line Icon and Duration
+            HStack(spacing: 12) {
+                if let display = section.display_informations {
+                    LineIcon(line: TransportLine(
+                        type: display.transportType,
+                        lineId: display.code ?? display.label ?? "?",
+                        status: .normal
+                    ), size: 36)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(display.direction ?? "Direction inconnue")
+                            .font(.system(.headline, design: .rounded))
+                            .fontWeight(.black)
+                            .foregroundColor(.white)
+                        Text(display.commercial_mode ?? "Transport")
+                            .font(.system(.caption, design: .rounded))
+                            .fontWeight(.bold)
+                            .foregroundColor(.gray)
+                    }
+                }
+                Spacer()
+                Text("\((section.duration ?? 0) / 60) MIN")
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.black)
+                    .foregroundColor(.gray)
+            }
+
+            // The "Segmented" Line Plan
+            VStack(alignment: .leading, spacing: 0) {
+                // Departure Station
+                HStack(spacing: 16) {
+                    VStack(spacing: 0) {
+                        Circle()
+                            .stroke(lineColor, lineWidth: 3)
+                            .background(Circle().fill(.black))
+                            .frame(width: 14, height: 14)
+
+                        Rectangle()
+                            .fill(lineColor)
+                            .frame(width: 3, height: 12)
+                    }
+                    .frame(width: 20)
+
+                    Text(section.from?.name ?? "Départ")
+                        .font(.system(.title3, design: .rounded))
+                        .fontWeight(.black)
+                        .foregroundColor(.white)
+
+                    Spacer()
+
+                    Text(DateFormat.formatTime(from: section.departure_date_time ?? ""))
+                        .font(.system(.headline, design: .monospaced))
+                        .fontWeight(.bold)
+                        .foregroundColor(.blue)
+                }
+
+                // Intermediate Stops Button
+                if let stops = section.stop_date_times, !stops.isEmpty {
+                    HStack(spacing: 16) {
+                        VStack(spacing: 0) {
+                            Rectangle()
+                                .fill(lineColor)
+                                .frame(width: 3, height: isExpanded ? 20 : 40)
+
+                            if isExpanded {
+                                Spacer(minLength: 0)
+                            }
+                        }
+                        .frame(width: 20)
+
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                isExpanded.toggle()
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                                    .font(.system(size: 10, weight: .black))
+                                Text("\(stops.count) ARRÊTS")
+                                    .font(.system(.caption, design: .rounded))
+                                    .fontWeight(.black)
+                            }
+                            .foregroundColor(.blue)
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 12)
+                            .background(Color.blue.opacity(0.1))
+                            .clipShape(Capsule())
+                        }
+                        .padding(.vertical, isExpanded ? 0 : 4)
+                    }
+
+                    if isExpanded {
+                        HStack(spacing: 16) {
+                            Rectangle()
+                                .fill(lineColor)
+                                .frame(width: 3)
+                                .frame(width: 20)
+
+                            VStack(alignment: .leading, spacing: 12) {
+                                ForEach(stops) { stop in
+                                    HStack {
+                                        Text(stop.stop_point.name ?? "")
+                                            .font(.system(.subheadline, design: .rounded))
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.gray)
+                                        Spacer()
+                                        Text(DateFormat.formatTime(from: stop.departure_date_time))
+                                            .font(.system(.caption, design: .monospaced))
+                                            .foregroundColor(.gray.opacity(0.6))
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 8)
+                        }
+                    }
+                }
+
+                // Arrival Station
+                HStack(spacing: 16) {
+                    VStack(spacing: 0) {
+                        Rectangle()
+                            .fill(lineColor)
+                            .frame(width: 3, height: 12)
+
+                        Circle()
+                            .stroke(lineColor, lineWidth: 3)
+                            .background(Circle().fill(.black))
+                            .frame(width: 14, height: 14)
+                    }
+                    .frame(width: 20)
+
+                    Text(section.to?.name ?? "Arrivée")
+                        .font(.system(.title3, design: .rounded))
+                        .fontWeight(.black)
+                        .foregroundColor(.white)
+
+                    Spacer()
+
+                    Text(DateFormat.formatTime(from: section.arrival_date_time ?? ""))
+                        .font(.system(.headline, design: .monospaced))
+                        .fontWeight(.bold)
+                        .foregroundColor(.blue)
+                }
+            }
+        }
+    }
+
+    private var walkingStep: some View {
+        HStack(spacing: 16) {
+            Image(systemName: "figure.walk")
+                .font(.system(size: 24, weight: .black))
+                .foregroundColor(.yellow)
+                .frame(width: 40)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("MARCHE")
+                    .font(.system(.headline, design: .rounded))
+                    .fontWeight(.black)
+                    .foregroundColor(.white)
+                Text(section.to?.name ?? "Destination")
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.bold)
+                    .foregroundColor(.gray)
+            }
+
+            Spacer()
+
+            Text("\((section.duration ?? 0) / 60) MIN")
+                .font(.system(.subheadline, design: .rounded))
+                .fontWeight(.black)
+                .foregroundColor(.gray)
+        }
+    }
+
+    private var transferStep: some View {
+        HStack(spacing: 16) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(.system(size: 22, weight: .black))
+                .foregroundColor(.orange)
+                .frame(width: 40)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("CORRESPONDANCE")
+                    .font(.system(.headline, design: .rounded))
+                    .fontWeight(.black)
+                    .foregroundColor(.white)
+                Text(section.from?.name ?? "Station")
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.bold)
+                    .foregroundColor(.gray)
+            }
+
+            Spacer()
+
+            Text("\((section.duration ?? 0) / 60) MIN")
+                .font(.system(.subheadline, design: .rounded))
+                .fontWeight(.black)
+                .foregroundColor(.gray)
+        }
+    }
+
+    private var waitingStep: some View {
+        HStack(spacing: 16) {
+            Image(systemName: "clock")
+                .font(.system(size: 22, weight: .black))
+                .foregroundColor(.gray)
+                .frame(width: 40)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("ATTENTE")
+                    .font(.system(.headline, design: .rounded))
+                    .fontWeight(.black)
+                    .foregroundColor(.white)
+                Text("À \(section.from?.name ?? "la station")")
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.bold)
+                    .foregroundColor(.gray)
+            }
+
+            Spacer()
+
+            Text("\((section.duration ?? 0) / 60) MIN")
+                .font(.system(.subheadline, design: .rounded))
+                .fontWeight(.black)
+                .foregroundColor(.gray)
+        }
+    }
+
 }
 
 #Preview {
